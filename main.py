@@ -126,12 +126,11 @@ class Forecast:
         for unit_num, user_list in self.u_users.items():
             self.unit_num = unit_num
             self.user_list = user_list
-            self.db_data = self.db_data.query(UserProperties).filter(UserProperties.uid.in_(self.user_list))
+            self.db_data = session.query(UserProperties).filter(UserProperties.uid.in_(self.user_list))
             self.segment_reg_date = date.today()
             self.dead_user_count = 0
             self.user_growth = 0
             self.segment_status = True  # True, если сегмет старый, False, если новый
-            self.process()
             self.segment()
             self.alive_users()
             self.dead_users()
@@ -155,7 +154,7 @@ class Forecast:
         если сегмент старше 180 дней и учитываются, если сегмент младше
         """
         for user in self.db_data.filter(UserProperties.ext_status_good.is_(True)):
-            self.usr.remove(user.uid)
+            self.user_list.remove(user.uid)
             if user.reg_date:
                 if (user.reg_date >= self.age_threshold and self.segment_status) or (not self.segment_status):
                     self.user_growth += 1
@@ -170,7 +169,7 @@ class Forecast:
         """
         dead_threshold = date.today() - timedelta(days=90)
         for user in self.db_data.filter(UserProperties.ext_status_good.is_(False)):
-            self.usr.remove(user.uid)
+            self.user_list.remove(user.uid)
             if (user.ext_close_date and user.ext_close_date <= dead_threshold) or user.ext_close_date is None:
                 self.dead_user_count += 1
                 self.user_growth -= 1
@@ -181,18 +180,18 @@ class Forecast:
         в соответствующую графу. Для некоторых сегментов отсутствует корректная дата начала работы
         (reg_date всех пользователей пусты). В таком случае прогноз по портам равен '-1'
         """
-        self.units[self.unit]['dead_ports'] = self.dead_user_count
+        self.units[self.unit_num]['dead_ports'] = self.dead_user_count
         if self.user_growth > 0 and self.segment_reg_date != date.today():
-            freeports = self.units[self.unit]['free_100'] + self.units[self.unit]['free_gb']
+            free_ports = self.units[self.unit_num]['free_100'] + self.units[self.unit_num]['free_gb']
             if self.segment_status:
                 growth_per_day = self.user_growth / 180
             else:
                 diff = (date.today() - self.segment_reg_date)
                 growth_per_day = self.user_growth / int(diff.days)
-            deadline = freeports / growth_per_day
-            self.units[self.unit]['forecast_no_free_ports'] = int(deadline)
+            deadline = free_ports / growth_per_day
+            self.units[self.unit_num]['forecast_no_free_ports'] = int(deadline)
         else:
-            self.units[self.unit]['forecast_no_free_ports'] = -1
+            self.units[self.unit_num]['forecast_no_free_ports'] = -1
 
     def final(self):
         """
